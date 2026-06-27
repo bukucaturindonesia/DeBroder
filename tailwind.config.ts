@@ -15,7 +15,9 @@ const config: Config = {
           offWhite: "#F7F7F2",
           charcoal: "#111111",
           softGray: "#E5E5E5",
-          muted: "#737373"
+          muted: "#737373",
+          green: "#174C3C",
+          greenDark: "#0E382C"
         }
       },
       boxShadow: {

@@ -22,6 +22,9 @@ Salin `.env.example` menjadi `.env.local`, lalu isi:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=ISI_SUPABASE_PROJECT_URL_DI_SINI
 NEXT_PUBLIC_SUPABASE_ANON_KEY=ISI_SUPABASE_ANON_PUBLIC_KEY_DI_SINI
+SUPABASE_SERVICE_ROLE_KEY=ISI_HANYA_DI_SERVER
+NEXT_PUBLIC_RECAPTCHA_SITE_KEY=ISI_RECAPTCHA_SITE_KEY
+RECAPTCHA_SECRET_KEY=ISI_RECAPTCHA_SECRET_KEY
 ```
 
 Gunakan Project URL Supabase, bukan URL REST endpoint. Contoh benar:
@@ -48,6 +51,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=ISI_SUPABASE_ANON_PUBLIC_KEY_DI_SINI
 2. Buka SQL Editor di Supabase.
 3. Jalankan isi `supabase/schema.sql`.
 
+Schema ini juga membuat bucket `public-assets`, tabel layanan dan media, serta kebijakan RLS. Jalankan ulang schema terbaru saat memperbarui project lama; seluruh perintah dibuat aman untuk dijalankan kembali.
+
 ## 5. Menjalankan Seed Data
 
 Jalankan isi `supabase/seed.sql` di SQL Editor setelah schema selesai dibuat.
@@ -60,6 +65,12 @@ Jalankan isi `supabase/seed.sql` di SQL Editor setelah schema selesai dibuat.
 4. Jalankan SQL tersebut di Supabase SQL Editor untuk membuat atau mengubah role user menjadi `superadmin`.
 
 Login admin tersedia di `/admin/login`. Dashboard tersedia di `/admin/dashboard` dan hanya bisa diakses user dengan role `superadmin`.
+
+Menu admin mencakup Hero, Produk, Kategori, Layanan, Store, Page Hero, Tentang, Kontak, dan Media Library. Media Library menerima maksimal 20 file sekaligus, mengoptimalkan foto, membuat thumbnail video, dan membatasi foto 10 MB serta video 100 MB.
+
+## Keamanan reCAPTCHA
+
+Gunakan reCAPTCHA v3 dan daftarkan domain production serta localhost untuk pengujian. Site key boleh berada di frontend; secret key hanya dipakai oleh route server `/api/recaptcha`. Login tetap dapat diuji di development tanpa key, tetapi deployment production harus mengisi kedua key.
 
 ## 7. Deploy Ulang ke Vercel
 

@@ -65,6 +65,19 @@ create table if not exists public.service_categories (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.services (
+  id uuid primary key default gen_random_uuid(),
+  nama text not null,
+  slug text not null,
+  deskripsi text not null default '',
+  image_url text not null default '/images/debroder/fallback/fallback-product.jpg',
+  harga_mulai numeric,
+  urutan integer not null default 0,
+  status_aktif boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.stores (
   id uuid primary key default gen_random_uuid(),
   nama_store text not null,
@@ -82,7 +95,7 @@ create table if not exists public.stores (
 
 create table if not exists public.hero_banners (
   id uuid primary key default gen_random_uuid(),
-  badge text not null default 'KAOS POLOS IMPORT & SABLON',
+  badge text not null default 'KAOS POLOS NEW STATE APPAREL',
   headline text not null,
   subheadline text not null,
   cta_primary_text text not null,
@@ -90,9 +103,11 @@ create table if not exists public.hero_banners (
   cta_secondary_text text not null,
   cta_secondary_link text not null,
   image_url text not null default '/images/debroder-hero.png',
+  mobile_image_url text,
   hero_video_url text,
   video_url text,
   object_position text not null default 'center center',
+  mobile_object_position text not null default 'center center',
   urutan integer not null default 0,
   status_aktif boolean not null default true,
   created_at timestamptz not null default now(),
@@ -140,7 +155,10 @@ create table if not exists public.instagram_banners (
   id uuid primary key default gen_random_uuid(),
   title text not null default 'Instagram DEBRODER',
   image_url text not null default '/images/debroder/banners/instagram-banner.jpg',
+  mobile_image_url text,
   link_url text not null default 'https://instagram.com/de_broder',
+  object_position text not null default 'center center',
+  mobile_object_position text not null default 'center center',
   status_aktif boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -180,8 +198,25 @@ create table if not exists public.trust_about_content (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.media_assets (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  storage_path text not null unique,
+  public_url text not null,
+  media_type text not null check (media_type in ('image', 'video')),
+  mime_type text not null,
+  size_bytes bigint not null default 0,
+  folder text not null default 'Galeri' check (folder in ('Hero', 'Produk', 'Kategori', 'Store', 'Logo', 'Galeri', 'Video')),
+  thumbnail_url text,
+  uploaded_by uuid references auth.users(id) on delete set null,
+  used_by text[] not null default '{}',
+  status_aktif boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table if exists public.hero_banners
-  add column if not exists badge text not null default 'KAOS POLOS IMPORT & SABLON',
+  add column if not exists badge text not null default 'KAOS POLOS NEW STATE APPAREL',
   add column if not exists title text,
   add column if not exists subtitle text,
   add column if not exists cta_text text,
@@ -189,6 +224,8 @@ alter table if exists public.hero_banners
   add column if not exists hero_video_url text,
   add column if not exists video_url text,
   add column if not exists object_position text not null default 'center center',
+  add column if not exists mobile_image_url text,
+  add column if not exists mobile_object_position text not null default 'center center',
   add column if not exists urutan integer not null default 0;
 
 alter table if exists public.products
@@ -198,13 +235,25 @@ alter table if exists public.products
   add column if not exists price numeric,
   add column if not exists harga numeric,
   add column if not exists base_price numeric,
-  add column if not exists price_label text;
+  add column if not exists price_label text,
+  add column if not exists slug text,
+  add column if not exists featured boolean not null default false;
 
 alter table if exists public.stores
-  add column if not exists image_url text;
+  add column if not exists image_url text,
+  add column if not exists jam_operasional text;
+
+alter table if exists public.hero_banners
+  add column if not exists desktop_video_url text,
+  add column if not exists mobile_video_url text;
 
 alter table if exists public.page_heroes
   add column if not exists mobile_image_url text,
+  add column if not exists mobile_object_position text not null default 'center center';
+
+alter table if exists public.instagram_banners
+  add column if not exists mobile_image_url text,
+  add column if not exists object_position text not null default 'center center',
   add column if not exists mobile_object_position text not null default 'center center';
 
 alter table if exists public.contact_settings
@@ -229,6 +278,11 @@ for each row execute function public.set_updated_at();
 drop trigger if exists set_service_categories_updated_at on public.service_categories;
 create trigger set_service_categories_updated_at
 before update on public.service_categories
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_services_updated_at on public.services;
+create trigger set_services_updated_at
+before update on public.services
 for each row execute function public.set_updated_at();
 
 drop trigger if exists set_stores_updated_at on public.stores;
@@ -276,9 +330,15 @@ create trigger set_trust_about_content_updated_at
 before update on public.trust_about_content
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_media_assets_updated_at on public.media_assets;
+create trigger set_media_assets_updated_at
+before update on public.media_assets
+for each row execute function public.set_updated_at();
+
 alter table public.profiles enable row level security;
 alter table public.products enable row level security;
 alter table public.service_categories enable row level security;
+alter table public.services enable row level security;
 alter table public.stores enable row level security;
 alter table public.hero_banners enable row level security;
 alter table public.about_content enable row level security;
@@ -288,6 +348,7 @@ alter table public.instagram_banners enable row level security;
 alter table public.page_heroes enable row level security;
 alter table public.order_steps enable row level security;
 alter table public.trust_about_content enable row level security;
+alter table public.media_assets enable row level security;
 
 drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile"
@@ -319,6 +380,17 @@ using (status_aktif = true);
 drop policy if exists "Superadmin can manage service categories" on public.service_categories;
 create policy "Superadmin can manage service categories"
 on public.service_categories for all
+using (public.is_superadmin())
+with check (public.is_superadmin());
+
+drop policy if exists "Public can read active services" on public.services;
+create policy "Public can read active services"
+on public.services for select
+using (status_aktif = true);
+
+drop policy if exists "Superadmin can manage services" on public.services;
+create policy "Superadmin can manage services"
+on public.services for all
 using (public.is_superadmin())
 with check (public.is_superadmin());
 
@@ -420,3 +492,48 @@ create policy "Superadmin can manage trust about content"
 on public.trust_about_content for all
 using (public.is_superadmin())
 with check (public.is_superadmin());
+
+drop policy if exists "Superadmin can read media assets" on public.media_assets;
+create policy "Superadmin can read media assets"
+on public.media_assets for select
+using (public.is_superadmin());
+
+drop policy if exists "Superadmin can manage media assets" on public.media_assets;
+create policy "Superadmin can manage media assets"
+on public.media_assets for all
+using (public.is_superadmin())
+with check (public.is_superadmin());
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'public-assets',
+  'public-assets',
+  true,
+  104857600,
+  array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Public can view public assets" on storage.objects;
+create policy "Public can view public assets"
+on storage.objects for select
+using (bucket_id = 'public-assets');
+
+drop policy if exists "Superadmin can upload public assets" on storage.objects;
+create policy "Superadmin can upload public assets"
+on storage.objects for insert
+with check (bucket_id = 'public-assets' and public.is_superadmin());
+
+drop policy if exists "Superadmin can update public assets" on storage.objects;
+create policy "Superadmin can update public assets"
+on storage.objects for update
+using (bucket_id = 'public-assets' and public.is_superadmin())
+with check (bucket_id = 'public-assets' and public.is_superadmin());
+
+drop policy if exists "Superadmin can delete public assets" on storage.objects;
+create policy "Superadmin can delete public assets"
+on storage.objects for delete
+using (bucket_id = 'public-assets' and public.is_superadmin());
