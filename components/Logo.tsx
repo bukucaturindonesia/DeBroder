@@ -1,40 +1,26 @@
-import Image from "next/image";
+/* eslint-disable @next/next/no-img-element */
 
 type LogoVariant =
-  | "symbol-black"
-  | "symbol-white"
-  | "primary-black"
+  | "primary-dark"
   | "primary-white"
+  | "symbol-dark"
+  | "symbol-white"
+  | "symbol-black"
+  | "primary-black"
   | "primary-dark-bg";
 
 type LogoSize = "sm" | "md" | "lg";
 
-const logoSrc: Record<LogoVariant, string> = {
-  "symbol-black": "/debroder-icon.png",
-  "symbol-white": "/brand/debroder/logo-symbol-white.svg",
-  "primary-black": "/brand/debroder/logo-primary-black.svg",
-  "primary-white": "/brand/debroder/logo-primary-white.svg",
-  "primary-dark-bg": "/brand/debroder/logo-primary-dark-bg.png"
-};
-
-const symbolSize: Record<LogoSize, number> = {
-  sm: 34,
-  md: 40,
-  lg: 52
-};
-
-const primarySize: Record<LogoSize, { width: number; height: number }> = {
-  sm: { width: 128, height: 40 },
-  md: { width: 168, height: 52 },
-  lg: { width: 220, height: 68 }
+const sizeClasses: Record<LogoSize, { symbol: string; wordmark: string; gap: string }> = {
+  sm: { symbol: "h-8 w-8", wordmark: "h-5 w-[104px]", gap: "gap-2" },
+  md: { symbol: "h-10 w-10", wordmark: "h-6 w-[126px]", gap: "gap-2.5" },
+  lg: { symbol: "h-12 w-12", wordmark: "h-7 w-[148px]", gap: "gap-3" }
 };
 
 export function Logo({
   variant,
   size = "md",
-  className = "",
-  showText = false,
-  textTone = "black"
+  className = ""
 }: {
   variant: LogoVariant;
   size?: LogoSize;
@@ -42,49 +28,24 @@ export function Logo({
   showText?: boolean;
   textTone?: "white" | "black";
 }) {
-  const isSymbol = variant.startsWith("symbol");
-  const dimensions = isSymbol
-    ? {
-        width: symbolSize[size],
-        height: symbolSize[size]
-      }
-    : primarySize[size];
-  const imageClass = isSymbol
-    ? size === "md"
-      ? "h-9 w-9 shrink-0 object-contain sm:h-10 sm:w-10"
-      : "h-auto shrink-0 object-contain"
-    : "h-auto shrink-0 object-contain";
+  const dimensions = sizeClasses[size];
+  const white = variant === "primary-white" || variant === "symbol-white" || variant === "primary-dark-bg";
+  const symbolOnly = variant.startsWith("symbol-");
+  const symbolSrc = white
+    ? "/brand/debroder/logo-symbol-white.svg"
+    : "/brand/debroder/logo-symbol-black.svg";
+  const wordmarkSrc = white
+    ? "/brand/debroder/logo-wordmark-white.svg"
+    : "/brand/debroder/logo-wordmark-black.svg";
+
+  if (symbolOnly) {
+    return <img src={symbolSrc} alt="Logo DE BRODER" className={`${dimensions.symbol} shrink-0 object-contain ${className}`} decoding="async" />;
+  }
 
   return (
-    <span className={`inline-flex items-center gap-3 ${className}`}>
-      <Image
-        src={logoSrc[variant]}
-        alt="Logo DE BRODER"
-        width={dimensions.width}
-        height={dimensions.height}
-        className={imageClass}
-        priority
-      />
-      {showText ? (
-        <span className="leading-none">
-          <span
-            className={`block text-sm font-bold tracking-[0.18em] sm:text-[15px] ${
-              textTone === "white"
-                ? "text-white"
-                : "text-black"
-            }`}
-          >
-            DE BRODER
-          </span>
-          <span
-            className={`mt-1 hidden text-[11px] font-medium sm:block ${
-              textTone === "white" ? "text-white/60" : "text-brand-charcoal/60"
-            }`}
-          >
-            Kaos Polos Import & Sablon
-          </span>
-        </span>
-      ) : null}
+    <span role="img" aria-label="Logo DE BRODER" className={`inline-flex shrink-0 items-center ${dimensions.gap} ${className}`}>
+      <img src={symbolSrc} alt="" aria-hidden="true" className={`${dimensions.symbol} shrink-0 object-contain`} decoding="async" />
+      <img src={wordmarkSrc} alt="" aria-hidden="true" className={`${dimensions.wordmark} object-contain object-left`} decoding="async" />
     </span>
   );
 }

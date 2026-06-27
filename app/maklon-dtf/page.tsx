@@ -27,9 +27,9 @@ export default async function MaklonDtfPage() {
       details={[
         "Maklon DTF cocok untuk reseller, brand clothing, dan produksi partai.",
         "Membantu pelaku usaha memproduksi desain dengan alur yang lebih praktis.",
-        "Placeholder gambar hasil DTF bisa diganti dari dashboard."
+        "Kapasitas produksi dapat disesuaikan untuk kebutuhan rutin maupun pesanan partai."
       ]}
-      visualLabel="Placeholder Hasil DTF"
+      visualLabel="Hasil Produksi Maklon DTF DE BRODER"
       ctaText="Konsultasi Maklon DTF"
       ctaHref={whatsappHref(content.contact.whatsapp_apparel)}
       currentSlug="maklon-dtf"

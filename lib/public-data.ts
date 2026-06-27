@@ -1,7 +1,10 @@
-import { fallbackContent, fallbackInstagramBanner } from "@/lib/fallback-data";
+import {
+  fallbackContent,
+  fallbackInstagramBanner,
+  pageHeroMobileImageFallbacks
+} from "@/lib/fallback-data";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import type {
-  AboutContent,
   ContactSettings,
   HeroBanner,
   InstagramBanner,
@@ -9,6 +12,7 @@ import type {
   PageHeroContent,
   Product,
   PublicContent,
+  Service,
   ServiceCategory,
   Store,
   Testimonial,
@@ -94,7 +98,9 @@ const finalPageHeroKeys = [
   "koleksi",
   "kaos-polos",
   "sablon-dtf",
+  "maklon-dtf",
   "jersey",
+  "cetak-sublim",
   "store",
   "cara-order"
 ];
@@ -112,6 +118,11 @@ function hasBlockedPublicText(values: Array<string | null | undefined>) {
 function cleanHero(hero: HeroBanner) {
   return {
     ...hero,
+    mobile_image_url:
+      hero.mobile_image_url || fallbackContent.hero.mobile_image_url,
+    object_position: hero.object_position || "center center",
+    mobile_object_position:
+      hero.mobile_object_position || hero.object_position || "center center",
     badge: displayBrand(hero.badge),
     headline: displayBrand(hero.headline),
     subheadline: displayBrand(hero.subheadline),
@@ -132,14 +143,43 @@ function cleanCategory(category: ServiceCategory) {
 }
 
 function cleanProduct(product: Product) {
+  const normalizedName =
+    product.nama === "Kaos Polos Import"
+      ? "Kaos Polos New State Apparel"
+      : product.nama;
+  const normalizedPrice =
+    normalizedName.toLowerCase().includes("sablon dtf")
+      ? 5000
+      : normalizedName === "Custom Jersey"
+        ? 75000
+        : normalizedName === "Maklon DTF"
+          ? 25000
+          : product.price;
+
   return {
     ...product,
-    nama: displayBrand(product.nama),
+    nama: displayBrand(normalizedName),
     kategori: displayBrand(product.kategori),
-    deskripsi: displayBrand(product.deskripsi),
-    short_detail: displayBrand(product.short_detail),
+    deskripsi: displayBrand(
+      product.deskripsi?.replace(/kaos polos import/gi, "kaos polos New State Apparel")
+    ),
+    short_detail: displayBrand(
+      product.short_detail?.replace(
+        /kaos polos import/gi,
+        "kaos polos New State Apparel"
+      )
+    ),
     description: displayBrand(product.description),
-    badge: displayBrand(product.badge)
+    badge: displayBrand(product.badge),
+    price: normalizedPrice
+  };
+}
+
+function cleanService(service: Service) {
+  return {
+    ...service,
+    nama: displayBrand(service.nama),
+    deskripsi: displayBrand(service.deskripsi)
   };
 }
 
@@ -190,6 +230,14 @@ function cleanInstagramBanner(banner: InstagramBanner | null) {
 
   return {
     ...banner,
+    image_url: banner.image_url || fallbackInstagramBanner.image_url,
+    mobile_image_url:
+      banner.mobile_image_url || fallbackInstagramBanner.mobile_image_url,
+    object_position: banner.object_position || "center center",
+    mobile_object_position:
+      banner.mobile_object_position ||
+      banner.object_position ||
+      "center center",
     title: displayBrand(banner.title)
   };
 }
@@ -209,7 +257,26 @@ function publicHeroes(heroes: HeroBanner[]) {
       ])
   );
 
-  return (filtered.length ? filtered : fallbackContent.heroes).map(cleanHero);
+  return (filtered.length ? filtered : fallbackContent.heroes).map(
+    (hero, index) => {
+      const fallbackHero =
+        fallbackContent.heroes[index] || fallbackContent.hero;
+
+      return cleanHero({
+        ...fallbackHero,
+        ...hero,
+        image_url: hero.image_url || fallbackHero.image_url,
+        mobile_image_url:
+          hero.mobile_image_url || fallbackHero.mobile_image_url,
+        object_position: hero.object_position || fallbackHero.object_position,
+        mobile_object_position:
+          hero.mobile_object_position ||
+          fallbackHero.mobile_object_position ||
+          hero.object_position ||
+          fallbackHero.object_position
+      });
+    }
+  );
 }
 
 function publicCategories(categories: ServiceCategory[]) {
@@ -280,7 +347,9 @@ function publicPageHeroes(pageHeroes: PageHeroContent[]) {
           ...hero,
           image_url: hero.image_url || fallbackHero.image_url,
           mobile_image_url:
-            hero.mobile_image_url || fallbackHero.mobile_image_url,
+            hero.mobile_image_url ||
+            fallbackHero.mobile_image_url ||
+            pageHeroMobileImageFallbacks[fallbackHero.page_key],
           object_position:
             hero.object_position || fallbackHero.object_position,
           mobile_object_position:
@@ -300,10 +369,10 @@ function publicPageHeroes(pageHeroes: PageHeroContent[]) {
 export async function getPublicContent(): Promise<PublicContent> {
   const [
     heroes,
-    about,
     instagramBanner,
     pageHeroes,
     categories,
+    services,
     products,
     stores,
     orderSteps,
@@ -312,7 +381,6 @@ export async function getPublicContent(): Promise<PublicContent> {
     contact
   ] = await Promise.all([
     readActive<HeroBanner>("hero_banners", fallbackContent.heroes),
-    readSingle<AboutContent>("about_content", fallbackContent.about),
     readOptionalActiveSingle<InstagramBanner>(
       "instagram_banners",
       fallbackInstagramBanner
@@ -326,6 +394,7 @@ export async function getPublicContent(): Promise<PublicContent> {
       "service_categories",
       fallbackContent.categories
     ),
+    readActive<Service>("services", fallbackContent.services),
     readActive<Product>("products", fallbackContent.products),
     readActive<Store>("stores", fallbackContent.stores),
     readActive<OrderStep>("order_steps", fallbackContent.orderSteps),
@@ -350,6 +419,7 @@ export async function getPublicContent(): Promise<PublicContent> {
     instagramBanner: cleanInstagramBanner(instagramBanner),
     pageHeroes: publicPageHeroes(pageHeroes),
     categories: publicCategories(categories),
+    services: services.map(cleanService),
     products: publicProducts(products),
     stores: stores.map(cleanStore),
     orderSteps: publicOrderSteps(orderSteps),

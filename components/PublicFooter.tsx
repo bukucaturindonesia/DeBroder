@@ -55,17 +55,15 @@ export function PublicFooter({ content }: { content: PublicContent }) {
   );
 
   return (
-    <footer className="bg-brand-charcoal py-10 text-white">
+    <footer className="bg-brand-charcoal pb-24 pt-10 text-white sm:py-10">
       <div className="section-shell grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo
-            variant="symbol-white"
-            size="md"
-            showText
-            textTone="white"
+            variant="primary-white"
+            size="lg"
           />
           <p className="mt-3 text-sm font-medium text-white/60">
-            Kaos Polos Import & Sablon
+            Kaos Polos • Sablon DTF • Maklon DTF • Custom Jersey
           </p>
           <Link
             href="/admin/login"
@@ -85,7 +83,7 @@ export function PublicFooter({ content }: { content: PublicContent }) {
 
         <FooterColumn title="Layanan">
           {serviceLinks.map((item) => (
-            <Link key={item.href} href={item.href} className="hover:text-white">
+            <Link key={`${item.href}-${item.label}`} href={item.href} className="hover:text-white">
               {item.label}
             </Link>
           ))}

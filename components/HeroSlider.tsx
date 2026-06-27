@@ -1,132 +1,61 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ResponsivePicture } from "@/components/ResponsivePicture";
 import type { HeroBanner } from "@/lib/types";
 
-function HeroImage({
-  src,
-  alt,
-  priority,
-  objectPosition,
-  className = "h-full w-full object-cover"
-}: {
-  src: string;
-  alt: string;
-  priority?: boolean;
-  objectPosition?: string;
-  className?: string;
-}) {
-  if (src.startsWith("/")) {
-    return (
-      <Image
-        src={src}
-        alt={alt}
-        width={1536}
-        height={1024}
-        priority={priority}
-        className={className}
-        style={{ objectPosition }}
-        sizes="100vw"
-      />
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      loading="lazy"
-      style={{ objectPosition }}
-    />
-  );
-}
-
 export function HeroSlider({ heroes }: { heroes: HeroBanner[] }) {
-  const slides = useMemo(
-    () => heroes.filter((hero) => hero.status_aktif !== false),
-    [heroes]
-  );
+  const slides = useMemo(() => heroes.filter((hero) => hero.status_aktif !== false), [heroes]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isHoverPaused, setIsHoverPaused] = useState(false);
-  const [isManualPaused, setIsManualPaused] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
-  const manualPauseTimer = useRef<number | null>(null);
+  const resumeTimer = useRef<number | null>(null);
   const total = slides.length;
-  const activeSlide = slides[activeIndex] || slides[0];
-  const isPaused = isHoverPaused || isManualPaused || prefersReducedMotion;
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updateMotionPreference = () =>
-      setPrefersReducedMotion(mediaQuery.matches);
-
-    updateMotionPreference();
-    mediaQuery.addEventListener("change", updateMotionPreference);
-
-    return () => {
-      mediaQuery.removeEventListener("change", updateMotionPreference);
-    };
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
   }, []);
 
   useEffect(() => {
-    if (total <= 1 || isPaused) return;
-
-    const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % total);
-    }, 4500);
-
+    if (total <= 1 || paused || reducedMotion) return;
+    const timer = window.setInterval(() => setActiveIndex((current) => (current + 1) % total), 5000);
     return () => window.clearInterval(timer);
-  }, [isPaused, total]);
+  }, [paused, reducedMotion, total]);
 
-  useEffect(() => {
-    return () => {
-      if (manualPauseTimer.current) {
-        window.clearTimeout(manualPauseTimer.current);
-      }
-    };
+  useEffect(() => () => {
+    if (resumeTimer.current) window.clearTimeout(resumeTimer.current);
   }, []);
 
-  useEffect(() => {
-    if (activeIndex >= total) {
-      setActiveIndex(0);
-    }
-  }, [activeIndex, total]);
+  if (!slides.length) return null;
 
-  if (!activeSlide) return null;
-
-  function pauseAfterInteraction() {
-    if (manualPauseTimer.current) {
-      window.clearTimeout(manualPauseTimer.current);
-    }
-
-    setIsManualPaused(true);
-    manualPauseTimer.current = window.setTimeout(() => {
-      setIsManualPaused(false);
-    }, 4800);
+  function pauseAfterAction() {
+    setPaused(true);
+    if (resumeTimer.current) window.clearTimeout(resumeTimer.current);
+    resumeTimer.current = window.setTimeout(() => setPaused(false), 5200);
   }
 
   function goTo(index: number) {
     setActiveIndex(index);
-    pauseAfterInteraction();
+    pauseAfterAction();
   }
 
   function goNext() {
     setActiveIndex((current) => (current + 1) % total);
-    pauseAfterInteraction();
+    pauseAfterAction();
   }
 
   function goPrev() {
     setActiveIndex((current) => (current - 1 + total) % total);
-    pauseAfterInteraction();
+    pauseAfterAction();
   }
 
   function handleTouchEnd(x: number) {
     if (touchStart === null || total <= 1) return;
-
     const delta = touchStart - x;
     if (Math.abs(delta) > 44) {
       if (delta > 0) goNext();
@@ -135,152 +64,74 @@ export function HeroSlider({ heroes }: { heroes: HeroBanner[] }) {
     setTouchStart(null);
   }
 
-  function renderSlideCopy(slide: HeroBanner, mobile = false) {
-    const headline = slide.headline || slide.title || "KAOS POLOS IMPORT";
-    const subtitle =
-      slide.subheadline ||
-      slide.subtitle ||
-      "Sablon DTF, Jersey, dan Custom Apparel";
-    const ctaHref = slide.cta_link || slide.cta_primary_link || "/koleksi";
-    const ctaText = slide.cta_text || slide.cta_primary_text || "Beli Sekarang";
-
-    return (
-      <div className={mobile ? "space-y-3" : "space-y-2"}>
-        <h1
-          className={
-            mobile
-              ? "text-2xl font-semibold leading-tight tracking-tight text-brand-charcoal"
-              : "w-fit bg-white px-4 py-2 text-3xl font-bold leading-tight text-brand-charcoal"
-          }
-        >
-          {headline}
-        </h1>
-        <p
-          className={
-            mobile
-              ? "max-w-xl text-sm font-medium leading-6 text-brand-charcoal/70"
-              : "w-fit max-w-xl bg-white px-4 py-2 text-base font-medium leading-6 text-brand-charcoal/75"
-          }
-        >
-          {subtitle}
-        </p>
-        <a
-          href={ctaHref}
-          className="inline-flex min-h-11 items-center rounded-full bg-brand-charcoal px-5 py-3 text-sm font-semibold text-white transition hover:bg-black/80"
-        >
-          {ctaText} <span aria-hidden="true">-&gt;</span>
-        </a>
-      </div>
-    );
-  }
-
   return (
-    <section id="beranda" className="w-full bg-white">
+    <section id="beranda" className="w-full bg-white" aria-roledescription="carousel" aria-label="Promo utama DE BRODER">
       <div
-        className="relative mx-auto w-full bg-brand-offWhite"
-        onMouseEnter={() => setIsHoverPaused(true)}
-        onMouseLeave={() => setIsHoverPaused(false)}
+        className="relative w-full overflow-hidden bg-brand-charcoal"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
         onTouchStart={(event) => setTouchStart(event.touches[0].clientX)}
         onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0].clientX)}
       >
-        <div className="overflow-hidden">
-          <div
-            className={`flex ${
-              prefersReducedMotion
-                ? ""
-                : "transition-transform duration-[750ms] ease-in-out"
-            }`}
-            style={{ transform: `translateX(-${activeIndex * 100}%)` }}
-          >
-            {slides.map((slide, index) => {
-            const videoUrl = slide.hero_video_url || slide.video_url;
-            const objectPosition =
-              slide.mobile_object_position ||
-              slide.object_position ||
-              "center center";
+        <div
+          className={`flex ${reducedMotion ? "" : "transition-transform duration-700 ease-out"}`}
+          style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+        >
+          {slides.map((slide, index) => {
+            const headline = slide.headline || slide.title || "Apparel untuk setiap kebutuhan";
+            const subtitle = slide.subheadline || slide.subtitle || "Sablon DTF, jersey, dan custom apparel.";
+            const ctaHref = slide.cta_link || slide.cta_primary_link || "/koleksi";
+            const ctaText = slide.cta_text || slide.cta_primary_text || "Beli Sekarang";
+            const desktopVideo = slide.desktop_video_url || slide.hero_video_url || slide.video_url;
+            const mobileVideo = slide.mobile_video_url || desktopVideo;
+            const desktopPosition = slide.object_position || "center center";
+            const mobilePosition = slide.mobile_object_position || desktopPosition;
 
             return (
-              <article
-                key={`${slide.headline}-${index}`}
-                className="min-w-full bg-brand-offWhite"
-                aria-hidden={index !== activeIndex}
-              >
-                <div className="relative aspect-[4/3] w-full sm:aspect-[16/7] lg:aspect-[16/6]">
-                  {videoUrl ? (
-                    <video
-                      src={videoUrl}
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                      className="h-full w-full object-cover"
-                      style={{ objectPosition }}
-                    />
+              <article key={`${headline}-${index}`} className="relative min-w-full" aria-hidden={index !== activeIndex}>
+                <div className="relative aspect-[4/5] w-full sm:aspect-[16/7] lg:aspect-[16/6]">
+                  {desktopVideo ? (
+                    <video autoPlay muted loop playsInline preload={index === 0 ? "metadata" : "none"} className="h-full w-full object-cover" style={{ objectPosition: desktopPosition }}>
+                      {mobileVideo ? <source src={mobileVideo} media="(max-width: 767px)" /> : null}
+                      <source src={desktopVideo} />
+                    </video>
                   ) : (
-                    <HeroImage
-                      src={
-                        slide.image_url ||
-                        "/images/debroder/fallback/fallback-hero.jpg"
-                      }
-                      alt={slide.headline || slide.title || "Hero DE BRODER"}
+                    <ResponsivePicture
+                      desktopSrc={slide.image_url || "/images/debroder/fallback/fallback-hero.jpg"}
+                      mobileSrc={slide.mobile_image_url || "/images/debroder/fallback/fallback-hero-mobile.jpg"}
+                      alt={headline}
                       priority={index === 0}
-                      objectPosition={objectPosition}
+                      className="h-full w-full object-cover"
+                      desktopObjectPosition={desktopPosition}
+                      mobileObjectPosition={mobilePosition}
                     />
                   )}
-                  <div className="absolute inset-0 hidden bg-gradient-to-t from-black/25 via-black/5 to-transparent sm:block" />
-                  <div className="absolute bottom-8 left-8 z-10 hidden max-w-[calc(100%-64px)] sm:block">
-                    {renderSlideCopy(slide)}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/5" />
+                  <div className="absolute bottom-7 left-4 right-4 z-10 sm:bottom-10 sm:left-8 sm:right-8 lg:bottom-12 lg:left-[max(2rem,calc((100vw-1160px)/2))]">
+                    <h1 className="max-w-3xl text-3xl font-semibold leading-[1.05] tracking-[-0.035em] text-white drop-shadow-sm sm:text-5xl lg:text-6xl">{headline}</h1>
+                    <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-white/85 sm:text-base">{subtitle}</p>
+                    <a href={ctaHref} className="mt-5 inline-flex min-h-11 items-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-brand-charcoal transition hover:bg-white/85">
+                      {ctaText}<span className="ml-2" aria-hidden="true">→</span>
+                    </a>
                   </div>
-                </div>
-                <div className="px-4 py-5 sm:hidden">
-                  {renderSlideCopy(slide, true)}
                 </div>
               </article>
             );
-            })}
-          </div>
+          })}
         </div>
 
-          {total > 1 ? (
-            <>
-              <button
-                type="button"
-                className="absolute left-4 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-brand-charcoal transition hover:bg-white sm:left-6 sm:flex"
-                aria-label="Banner sebelumnya"
-                onClick={goPrev}
-              >
-                {"<"}
-              </button>
-              <button
-                type="button"
-                className="absolute right-4 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-brand-charcoal transition hover:bg-white sm:right-6 sm:flex"
-                aria-label="Banner berikutnya"
-                onClick={goNext}
-              >
-                {">"}
-              </button>
-              <div
-                className="mx-auto my-4 flex w-fit gap-2 rounded-full bg-white px-3 py-2 sm:absolute sm:bottom-6 sm:right-6 sm:z-20 sm:my-0 sm:bg-white/90 sm:backdrop-blur"
-                aria-label="Slider indicator"
-              >
-                {slides.map((slide, index) => (
-                  <button
-                    key={`${slide.headline}-${index}`}
-                    type="button"
-                    className={`h-2 rounded-full transition ${
-                      index === activeIndex
-                        ? "w-6 bg-brand-charcoal"
-                        : "w-2 bg-brand-softGray hover:bg-brand-charcoal/50"
-                    }`}
-                    aria-label={`Tampilkan banner ${index + 1}`}
-                    aria-current={index === activeIndex}
-                    onClick={() => goTo(index)}
-                  />
-                ))}
-              </div>
-            </>
-          ) : null}
-        </div>
+        {total > 1 ? (
+          <>
+            <button type="button" onClick={goPrev} aria-label="Banner sebelumnya" className="absolute left-4 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-brand-charcoal transition hover:bg-white sm:grid">←</button>
+            <button type="button" onClick={goNext} aria-label="Banner berikutnya" className="absolute right-4 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-brand-charcoal transition hover:bg-white sm:grid">→</button>
+            <div className="absolute bottom-4 right-4 z-20 flex gap-2 rounded-full bg-black/20 px-3 py-2 backdrop-blur sm:bottom-6 sm:right-6" aria-label="Pilih banner">
+              {slides.map((slide, index) => (
+                <button key={`${slide.headline}-${index}`} type="button" onClick={() => goTo(index)} aria-label={`Tampilkan banner ${index + 1}`} aria-current={index === activeIndex} className={`h-2 rounded-full transition ${index === activeIndex ? "w-6 bg-white" : "w-2 bg-white/50 hover:bg-white"}`} />
+              ))}
+            </div>
+          </>
+        ) : null}
+      </div>
     </section>
   );
 }

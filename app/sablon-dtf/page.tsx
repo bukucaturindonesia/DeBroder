@@ -27,9 +27,9 @@ export default async function SablonDtfPage() {
       details={[
         "Sablon DTF cocok untuk custom kaos, produksi kecil, dan produksi partai.",
         "Bisa digunakan untuk brand clothing, event, komunitas, instansi, dan perusahaan.",
-        "Placeholder gambar proses sablon DTF dapat diganti dari dashboard."
+        "Hasil cetak tajam, fleksibel untuk desain penuh warna, dan nyaman dipakai."
       ]}
-      visualLabel="Placeholder Proses Sablon DTF"
+      visualLabel="Proses Sablon DTF DE BRODER"
       ctaText="Konsultasi Sablon DTF"
       ctaHref={whatsappHref(content.contact.whatsapp_apparel)}
       currentSlug="sablon-dtf"

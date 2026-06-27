@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "@/components/Logo";
+import { MediaLibraryPanel } from "@/components/admin/MediaLibrary";
 import { createSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
 import { formatRupiah } from "@/lib/url";
 
@@ -37,8 +38,13 @@ type TableConfig = {
 };
 type AdminValue = string | number | boolean | string[] | null | undefined;
 type AdminRow = Record<string, AdminValue> & { id?: string };
+type MediaChoice = { id: string; name: string; public_url: string; media_type: "image" | "video" };
 type OverviewStats = {
   products: number;
+  productsInactive: number;
+  categories: number;
+  services: number;
+  media: number;
   stores: number;
   heroes: number;
   banners: number;
@@ -50,7 +56,35 @@ const objectPositionOptions = [
   "center top",
   "center bottom",
   "left center",
-  "right center"
+  "right center",
+  "left top",
+  "left bottom",
+  "right top",
+  "right bottom"
+];
+
+const imageGuides = [
+  ["Landing Hero Desktop", "1920 x 900", "32:15", "Hero utama homepage"],
+  ["Landing Hero Mobile", "1080 x 1350", "4:5", "Hero utama homepage mobile"],
+  ["Hero Sablon Desktop", "1920 x 800", "12:5", "Halaman Sablon DTF"],
+  ["Hero Sablon Mobile", "1080 x 1350", "4:5", "Halaman Sablon DTF mobile"],
+  ["Hero Jersey Desktop", "1920 x 800", "12:5", "Halaman Custom Jersey"],
+  ["Hero Jersey Mobile", "1080 x 1350", "4:5", "Halaman Custom Jersey mobile"],
+  ["Hero Maklon Desktop", "1920 x 800", "12:5", "Halaman Maklon DTF"],
+  ["Hero Maklon Mobile", "1080 x 1350", "4:5", "Halaman Maklon DTF mobile"],
+  ["Hero Cetak Sublim Desktop", "1920 x 800", "12:5", "Halaman Cetak Sublim"],
+  ["Hero Cetak Sublim Mobile", "1080 x 1350", "4:5", "Halaman Cetak Sublim mobile"],
+  ["Hero Kaos Polos Desktop", "1920 x 800", "12:5", "Halaman Kaos Polos"],
+  ["Hero Kaos Polos Mobile", "1080 x 1350", "4:5", "Halaman Kaos Polos mobile"],
+  ["Banner Instagram Desktop", "1920 x 800", "12:5", "Banner Instagram homepage"],
+  ["Banner Instagram Mobile", "1080 x 1350", "4:5", "Banner Instagram mobile"],
+  ["Benefit Images", "1200 x 900", "4:3", "Carousel keunggulan"],
+  ["Product Images", "1200 x 1200", "1:1", "Katalog produk"],
+  ["Store Images", "1200 x 800", "3:2", "Kartu store"],
+  ["Logo SVG", "Vector", "Original", "Navbar, footer, admin"],
+  ["Logo PNG", "2048 px sisi panjang", "Original", "Fallback logo transparan"],
+  ["Favicon", "512 x 512", "1:1", "Browser icon"],
+  ["Apple Touch Icon", "180 x 180", "1:1", "Icon iOS"]
 ];
 
 const tableConfigs: TableConfig[] = [
@@ -76,7 +110,7 @@ const tableConfigs: TableConfig[] = [
         name: "headline",
         label: "Judul highlight baris 1",
         type: "text",
-        placeholder: "KAOS POLOS IMPORT",
+        placeholder: "KAOS POLOS NEW STATE APPAREL",
         required: true
       },
       {
@@ -100,20 +134,45 @@ const tableConfigs: TableConfig[] = [
       },
       {
         name: "image_url",
-        label: "Gambar hero",
+        label: "Upload Hero Desktop",
         type: "image",
         placeholder: "/images/debroder/hero/hero-home.jpg",
-        helper: "Rekomendasi 1920x900 atau 16:7."
+        helper: "Rekomendasi 1920x900."
+      },
+      {
+        name: "mobile_image_url",
+        label: "Upload Hero Mobile",
+        type: "image",
+        placeholder: "/images/debroder/hero/hero-home-mobile.jpg",
+        helper: "Rekomendasi 1080x1350."
       },
       {
         name: "hero_video_url",
-        label: "Video hero opsional",
+        label: "Video hero desktop (kompatibilitas)",
+        type: "video",
+        placeholder: "https://..."
+      },
+      {
+        name: "desktop_video_url",
+        label: "Video hero desktop",
+        type: "video",
+        placeholder: "https://..."
+      },
+      {
+        name: "mobile_video_url",
+        label: "Video hero mobile",
         type: "video",
         placeholder: "https://..."
       },
       {
         name: "object_position",
-        label: "Posisi gambar",
+        label: "Desktop Object Position",
+        type: "select",
+        options: objectPositionOptions
+      },
+      {
+        name: "mobile_object_position",
+        label: "Mobile Object Position",
         type: "select",
         options: objectPositionOptions
       },
@@ -163,11 +222,17 @@ const tableConfigs: TableConfig[] = [
         placeholder: "Kaos Polos"
       },
       {
+        name: "slug",
+        label: "Slug produk",
+        type: "text",
+        placeholder: "kaos-polos-cotton-combed"
+      },
+      {
         name: "image_url",
         label: "Gambar produk",
         type: "image",
         placeholder: "/images/debroder/products/kaos-polos.jpg",
-        helper: "Rekomendasi 1200x1200 atau 4:5."
+        helper: "Rekomendasi 1200x1200."
       },
       {
         name: "link_url",
@@ -182,6 +247,7 @@ const tableConfigs: TableConfig[] = [
         placeholder: "https://wa.me/6285355333364"
       },
       { name: "urutan", label: "Urutan tampil", type: "number" },
+      { name: "featured", label: "Produk unggulan", type: "boolean" },
       { name: "status_aktif", label: "Aktif", type: "boolean" }
     ]
   },
@@ -224,6 +290,24 @@ const tableConfigs: TableConfig[] = [
     ]
   },
   {
+    key: "services",
+    label: "Layanan",
+    navLabel: "Layanan",
+    href: "/admin/services",
+    table: "services",
+    description: "Kelola kartu pada bagian Layanan & Produk DEBRODER.",
+    orderField: "urutan",
+    fields: [
+      { name: "nama", label: "Nama layanan", type: "text", placeholder: "Sablon DTF", required: true },
+      { name: "slug", label: "Slug halaman", type: "text", placeholder: "sablon-dtf", required: true },
+      { name: "deskripsi", label: "Deskripsi singkat", type: "textarea", placeholder: "Hasil tajam untuk brand dan komunitas." },
+      { name: "harga_mulai", label: "Harga mulai", type: "number", nullable: true, placeholder: "5000" },
+      { name: "image_url", label: "Foto layanan", type: "image", helper: "Rekomendasi 1200x1500 (4:5)." },
+      { name: "urutan", label: "Urutan tampil", type: "number" },
+      { name: "status_aktif", label: "Aktif", type: "boolean" }
+    ]
+  },
+  {
     key: "banner",
     label: "Banner Instagram",
     navLabel: "Banner Instagram",
@@ -240,16 +324,35 @@ const tableConfigs: TableConfig[] = [
       },
       {
         name: "image_url",
-        label: "Gambar banner",
+        label: "Upload Banner Desktop",
         type: "image",
         placeholder: "/images/debroder/banners/instagram-banner.jpg",
-        helper: "Rekomendasi 1920x900."
+        helper: "Rekomendasi 1920x800."
+      },
+      {
+        name: "mobile_image_url",
+        label: "Upload Banner Mobile",
+        type: "image",
+        placeholder: "/images/debroder/banners/instagram-banner-mobile.jpg",
+        helper: "Rekomendasi 1080x1350."
       },
       {
         name: "link_url",
         label: "Link Instagram",
         type: "text",
         placeholder: "https://instagram.com/de_broder"
+      },
+      {
+        name: "object_position",
+        label: "Desktop Object Position",
+        type: "select",
+        options: objectPositionOptions
+      },
+      {
+        name: "mobile_object_position",
+        label: "Mobile Object Position",
+        type: "select",
+        options: objectPositionOptions
       },
       { name: "status_aktif", label: "Aktif", type: "boolean" }
     ]
@@ -271,7 +374,9 @@ const tableConfigs: TableConfig[] = [
           "koleksi",
           "kaos-polos",
           "sablon-dtf",
+          "maklon-dtf",
           "jersey",
+          "cetak-sublim",
           "store",
           "cara-order"
         ],
@@ -299,27 +404,27 @@ const tableConfigs: TableConfig[] = [
       },
       {
         name: "image_url",
-        label: "Gambar page hero",
+        label: "Upload Hero Desktop",
         type: "image",
-        placeholder: "/images/debroder/page-heroes/hero-koleksi.jpg",
-        helper: "Rekomendasi 1600x500."
+        placeholder: "/images/debroder/page-heroes/hero-1.jpg",
+        helper: "Rekomendasi 1920x800."
       },
       {
         name: "mobile_image_url",
-        label: "Gambar mobile opsional",
+        label: "Upload Hero Mobile",
         type: "image",
-        placeholder: "/images/debroder/page-heroes/hero-koleksi.jpg",
-        helper: "Kosongkan jika ingin memakai gambar desktop."
+        placeholder: "/images/debroder/page-heroes/hero-1-mobile.jpg",
+        helper: "Rekomendasi 1080x1350."
       },
       {
         name: "object_position",
-        label: "Posisi gambar",
+        label: "Desktop Object Position",
         type: "select",
         options: objectPositionOptions
       },
       {
         name: "mobile_object_position",
-        label: "Posisi gambar mobile",
+        label: "Mobile Object Position",
         type: "select",
         options: objectPositionOptions
       },
@@ -373,11 +478,17 @@ const tableConfigs: TableConfig[] = [
         placeholder: "https://www.google.com/maps/search/?api=1&query=..."
       },
       {
+        name: "jam_operasional",
+        label: "Jam operasional",
+        type: "text",
+        placeholder: "Senin–Sabtu, 09.00–21.00"
+      },
+      {
         name: "image_url",
         label: "Foto store",
         type: "image",
         placeholder: "/images/debroder/stores/store-pettarani.jpg",
-        helper: "Rekomendasi 1200x800 atau 16:9."
+        helper: "Rekomendasi 1200x800."
       },
       { name: "urutan", label: "Urutan tampil", type: "number" },
       { name: "status_aktif", label: "Aktif", type: "boolean" }
@@ -433,6 +544,15 @@ const tableConfigs: TableConfig[] = [
       },
       { name: "status_aktif", label: "Aktif", type: "boolean" }
     ]
+  },
+  {
+    key: "media",
+    label: "Media Library",
+    navLabel: "Media Library",
+    href: "/admin/media",
+    table: "",
+    description: "Upload, cari, replace, dan kelola aset foto atau video.",
+    fields: []
   },
   {
     key: "contact-footer",
@@ -518,12 +638,6 @@ function valueToText(value: AdminValue) {
   return value?.toString() || "";
 }
 
-function fieldValue(value: AdminValue) {
-  if (Array.isArray(value)) return value.join("\n");
-  if (typeof value === "boolean") return value;
-  return value?.toString() || "";
-}
-
 function friendlyError(message?: string) {
   if (!message) return "Aksi belum berhasil. Coba lagi sebentar.";
   if (message.toLowerCase().includes("storage")) {
@@ -544,10 +658,22 @@ function looksLikeUrlOrPath(value: string) {
   );
 }
 
+function makeSlug(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 function previewUrl(row: AdminRow) {
   return (
     valueToText(row.image_url) ||
+    valueToText(row.mobile_image_url) ||
     valueToText(row.gambar_url) ||
+    valueToText(row.desktop_video_url) ||
+    valueToText(row.mobile_video_url) ||
     valueToText(row.hero_video_url)
   );
 }
@@ -566,8 +692,13 @@ export function AdminDashboard() {
   const [isDenied, setIsDenied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [mediaChoices, setMediaChoices] = useState<MediaChoice[]>([]);
   const [stats, setStats] = useState<OverviewStats>({
     products: 0,
+    productsInactive: 0,
+    categories: 0,
+    services: 0,
+    media: 0,
     stores: 0,
     heroes: 0,
     banners: 0,
@@ -637,6 +768,16 @@ export function AdminDashboard() {
     return count || 0;
   }
 
+  async function countInactive(table: string) {
+    const supabase = createSupabaseClient();
+    if (!supabase) return 0;
+    const { count, error } = await supabase
+      .from(table)
+      .select("id", { count: "exact", head: true })
+      .eq("status_aktif", false);
+    return error ? 0 : count || 0;
+  }
+
   async function checkStorageReady() {
     const supabase = createSupabaseClient();
     if (!supabase) return false;
@@ -649,9 +790,13 @@ export function AdminDashboard() {
   }
 
   async function loadOverview() {
-    const [products, stores, heroes, banners, pageHeroes, uploadReady] =
+    const [products, productsInactive, categories, services, media, stores, heroes, banners, pageHeroes, uploadReady] =
       await Promise.all([
         countActive("products"),
+        countInactive("products"),
+        countActive("service_categories"),
+        countActive("services"),
+        countActive("media_assets"),
         countActive("stores"),
         countActive("hero_banners"),
         countActive("instagram_banners"),
@@ -659,7 +804,7 @@ export function AdminDashboard() {
         checkStorageReady()
       ]);
 
-    setStats({ products, stores, heroes, banners, pageHeroes });
+    setStats({ products, productsInactive, categories, services, media, stores, heroes, banners, pageHeroes });
     setStorageReady(uploadReady);
   }
 
@@ -682,6 +827,22 @@ export function AdminDashboard() {
 
     setRows((data || []) as AdminRow[]);
   }
+
+  async function loadMediaChoices() {
+    const supabase = createSupabaseClient();
+    if (!supabase) return;
+    const { data } = await supabase
+      .from("media_assets")
+      .select("id,name,public_url,media_type")
+      .eq("status_aktif", true)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setMediaChoices((data || []) as MediaChoice[]);
+  }
+
+  useEffect(() => {
+    if (isAllowed) loadMediaChoices();
+  }, [isAllowed]);
 
   useEffect(() => {
     setRows([]);
@@ -757,9 +918,17 @@ export function AdminDashboard() {
       }
 
       if (
-        ["image_url", "gambar_url", "hero_video_url", "video_url", "link_url", "maps_link"].includes(
-          field.name
-        ) &&
+        [
+          "image_url",
+          "mobile_image_url",
+          "gambar_url",
+          "desktop_video_url",
+          "mobile_video_url",
+          "hero_video_url",
+          "video_url",
+          "link_url",
+          "maps_link"
+        ].includes(field.name) &&
         textValue &&
         !looksLikeUrlOrPath(textValue)
       ) {
@@ -796,6 +965,15 @@ export function AdminDashboard() {
       payload.whatsapp_link =
         valueToText(payload.whatsapp_link) || "https://wa.me/6285355333364";
       payload.kategori = valueToText(payload.kategori) || "Produk";
+      payload.slug = valueToText(payload.slug) || makeSlug(valueToText(payload.nama));
+    }
+
+    if (activeKey === "services") {
+      payload.slug = valueToText(payload.slug) || makeSlug(valueToText(payload.nama));
+      payload.image_url =
+        valueToText(payload.image_url) ||
+        "/images/debroder/fallback/fallback-product.jpg";
+      payload.deskripsi = valueToText(payload.deskripsi);
     }
 
     if (activeKey === "hero") {
@@ -805,6 +983,19 @@ export function AdminDashboard() {
       payload.cta_link = valueToText(payload.cta_primary_link);
       payload.cta_secondary_text = valueToText(payload.cta_secondary_text);
       payload.cta_secondary_link = valueToText(payload.cta_secondary_link);
+      payload.mobile_object_position =
+        valueToText(payload.mobile_object_position) ||
+        valueToText(payload.object_position) ||
+        "center center";
+    }
+
+    if (activeKey === "banner") {
+      payload.object_position =
+        valueToText(payload.object_position) || "center center";
+      payload.mobile_object_position =
+        valueToText(payload.mobile_object_position) ||
+        valueToText(payload.object_position) ||
+        "center center";
     }
 
     if (activeKey === "store") {
@@ -837,6 +1028,20 @@ export function AdminDashboard() {
   async function uploadAsset(field: FieldConfig, file?: File) {
     if (!file) return;
 
+    const isVideo = field.type === "video";
+    const allowed = isVideo
+      ? ["video/mp4", "video/webm", "video/quicktime"]
+      : ["image/jpeg", "image/png", "image/webp"];
+    const limit = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (!allowed.includes(file.type)) {
+      setStatus(isVideo ? "Format video harus MP4, WebM, atau MOV." : "Format foto harus JPG, PNG, atau WebP.");
+      return;
+    }
+    if (file.size > limit) {
+      setStatus(isVideo ? "Ukuran video maksimal 100 MB." : "Ukuran foto maksimal 10 MB.");
+      return;
+    }
+
     const supabase = createSupabaseClient();
     if (!supabase) {
       setStatus("Upload belum tersedia. Isi URL manual terlebih dahulu.");
@@ -852,7 +1057,7 @@ export function AdminDashboard() {
     const { error } = await supabase.storage
       .from("public-assets")
       .upload(path, file, {
-        cacheControl: "3600",
+        cacheControl: "31536000",
         upsert: true,
         contentType: file.type
       });
@@ -865,6 +1070,27 @@ export function AdminDashboard() {
 
     const { data } = supabase.storage.from("public-assets").getPublicUrl(path);
     updateField(field, data.publicUrl);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const folderMap: Record<string, string> = {
+      hero: "Hero",
+      products: "Produk",
+      services: "Produk",
+      categories: "Kategori",
+      store: "Store",
+      banner: "Galeri",
+      "page-hero": "Hero"
+    };
+    await supabase.from("media_assets").insert({
+      name: file.name,
+      storage_path: path,
+      public_url: data.publicUrl,
+      media_type: isVideo ? "video" : "image",
+      mime_type: file.type,
+      size_bytes: file.size,
+      folder: isVideo ? "Video" : folderMap[activeKey] || "Galeri",
+      uploaded_by: sessionData.session?.user.id || null
+    });
+    loadMediaChoices();
     setUploadingField(null);
     setStatus("Upload berhasil. Jangan lupa Simpan Perubahan.");
   }
@@ -933,7 +1159,6 @@ export function AdminDashboard() {
   }
 
   function renderField(field: FieldConfig) {
-    const value = fieldValue(form[field.name]);
     const commonClass =
       "mt-2 w-full rounded-lg border border-brand-softGray px-4 py-3 text-sm font-medium outline-none transition focus:border-brand-charcoal";
 
@@ -990,6 +1215,21 @@ export function AdminDashboard() {
             placeholder={field.placeholder}
             className={commonClass}
           />
+          {mediaChoices.some((asset) => asset.media_type === field.type) ? (
+            <select
+              value=""
+              onChange={(event) => updateField(field, event.target.value)}
+              className={commonClass}
+              aria-label={`Pilih media lama untuk ${field.label}`}
+            >
+              <option value="">Pilih dari Media Library...</option>
+              {mediaChoices
+                .filter((asset) => asset.media_type === field.type)
+                .map((asset) => (
+                  <option key={asset.id} value={asset.public_url}>{asset.name}</option>
+                ))}
+            </select>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex min-h-10 cursor-pointer items-center rounded-full border border-brand-softGray px-4 text-xs font-semibold text-brand-charcoal transition hover:border-brand-charcoal">
               {uploadingField === field.name ? "Mengupload..." : "Upload"}
@@ -1066,7 +1306,7 @@ export function AdminDashboard() {
     <main className="min-h-screen bg-brand-offWhite text-brand-charcoal">
       <div className="grid lg:grid-cols-[280px_1fr]">
         <aside className="hidden min-h-screen border-r border-brand-softGray bg-white p-5 lg:block">
-          <Logo variant="symbol-black" size="md" showText />
+          <Logo variant="primary-dark" size="md" />
           <nav className="mt-8 grid gap-2">
             {tableConfigs.map((config) => (
               <button
@@ -1197,6 +1437,10 @@ export function AdminDashboard() {
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {[
                   ["Total produk aktif", stats.products],
+                  ["Produk nonaktif", stats.productsInactive],
+                  ["Kategori aktif", stats.categories],
+                  ["Layanan aktif", stats.services],
+                  ["Total media", stats.media],
                   ["Total store aktif", stats.stores],
                   ["Hero aktif", stats.heroes],
                   ["Banner aktif", stats.banners]
@@ -1212,7 +1456,7 @@ export function AdminDashboard() {
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 {tableConfigs
                   .filter((config) =>
-                    ["hero", "products", "banner", "store", "page-hero"].includes(
+                    ["hero", "products", "services", "media", "store", "page-hero"].includes(
                       config.key
                     )
                   )
@@ -1230,7 +1474,80 @@ export function AdminDashboard() {
                     </button>
                   ))}
               </div>
+              <div className="border border-brand-softGray bg-white p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-charcoal/50">Media terbaru</p>
+                    <h2 className="mt-2 text-2xl font-semibold">Aset yang baru diupload</h2>
+                  </div>
+                  <button type="button" onClick={() => navigateTo(tableConfigs.find((item) => item.key === "media")!)} className="text-sm font-semibold text-brand-green hover:underline">Buka library</button>
+                </div>
+                {mediaChoices.length ? (
+                  <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                    {mediaChoices.slice(0, 5).map((asset) => (
+                      <article key={asset.id} className="min-w-0">
+                        {asset.media_type === "image" ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={asset.public_url} alt={asset.name} className="aspect-square w-full bg-brand-offWhite object-cover" />
+                        ) : (
+                          <div className="grid aspect-square place-items-center bg-brand-charcoal text-xs font-semibold text-white">VIDEO</div>
+                        )}
+                        <p className="mt-2 truncate text-xs font-semibold">{asset.name}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : <p className="mt-5 bg-brand-offWhite p-4 text-sm text-brand-charcoal/60">Belum ada media. Tambahkan aset pertama melalui Media Library.</p>}
+              </div>
+              <div className="border border-brand-softGray bg-white p-5">
+                <div className="max-w-3xl">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-charcoal/50">
+                    Panduan Upload
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold">
+                    Image Dimension Guide
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-brand-charcoal/65">
+                    Gunakan ukuran berikut agar gambar tetap tajam, responsif,
+                    dan konsisten di mobile maupun desktop.
+                  </p>
+                </div>
+                <div className="mt-5 overflow-x-auto">
+                  <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-brand-softGray text-xs uppercase tracking-[0.16em] text-brand-charcoal/50">
+                        <th className="py-3 pr-4 font-semibold">Nama gambar</th>
+                        <th className="py-3 pr-4 font-semibold">Ukuran ideal</th>
+                        <th className="py-3 pr-4 font-semibold">Aspect ratio</th>
+                        <th className="py-3 font-semibold">Lokasi penggunaan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {imageGuides.map(([name, size, ratio, location]) => (
+                        <tr
+                          key={name}
+                          className="border-b border-brand-softGray last:border-0"
+                        >
+                          <td className="py-3 pr-4 font-semibold text-brand-charcoal">
+                            {name}
+                          </td>
+                          <td className="py-3 pr-4 text-brand-charcoal/70">
+                            {size}
+                          </td>
+                          <td className="py-3 pr-4 text-brand-charcoal/70">
+                            {ratio}
+                          </td>
+                          <td className="py-3 text-brand-charcoal/70">
+                            {location}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
+          ) : activeKey === "media" ? (
+            <MediaLibraryPanel />
           ) : (
             <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
               <form

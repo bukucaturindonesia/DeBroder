@@ -27,9 +27,9 @@ export default async function JerseyPage() {
       details={[
         "Custom jersey untuk tim olahraga, komunitas, sekolah, kantor, instansi, dan event.",
         "Desain bisa disesuaikan dengan identitas tim atau kebutuhan acara.",
-        "Placeholder contoh jersey bisa diganti dari dashboard Super Admin."
+        "Pilihan bahan, warna, dan detail produksi dapat dikonsultasikan sesuai kebutuhan."
       ]}
-      visualLabel="Placeholder Contoh Jersey"
+      visualLabel="Contoh Custom Jersey DE BRODER"
       ctaText="Pesan Jersey Custom"
       ctaHref={whatsappHref(content.contact.whatsapp_apparel)}
       currentSlug="jersey"

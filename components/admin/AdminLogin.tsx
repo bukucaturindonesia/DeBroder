@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import Script from "next/script";
 import { Logo } from "@/components/Logo";
 import {
   createSupabaseClient,
@@ -38,6 +39,26 @@ export function AdminLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const supabaseStatus = getSupabaseEnvStatus();
   const configured = isSupabaseConfigured();
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim();
+
+  async function verifyRecaptcha() {
+    if (!recaptchaSiteKey) return true;
+    const grecaptcha = window.grecaptcha;
+    if (!grecaptcha) throw new Error("reCAPTCHA belum siap.");
+    const token = await new Promise<string>((resolve, reject) => {
+      grecaptcha.ready(() => {
+        grecaptcha.execute(recaptchaSiteKey, { action: "admin_login" }).then(resolve).catch(reject);
+      });
+    });
+    const response = await fetch("/api/recaptcha", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, action: "admin_login" })
+    });
+    const result = (await response.json()) as { success?: boolean; message?: string };
+    if (!response.ok || !result.success) throw new Error(result.message || "Verifikasi keamanan gagal.");
+    return true;
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,6 +71,13 @@ export function AdminLogin() {
     }
 
     setIsLoading(true);
+    try {
+      await verifyRecaptcha();
+    } catch (recaptchaError) {
+      setIsLoading(false);
+      setError(recaptchaError instanceof Error ? recaptchaError.message : "Verifikasi keamanan gagal.");
+      return;
+    }
     const { data, error: loginError } =
       await supabase.auth.signInWithPassword({
         email,
@@ -92,12 +120,13 @@ export function AdminLogin() {
 
   return (
     <main className="min-h-screen bg-brand-offWhite px-4 py-10 text-brand-charcoal">
+      {recaptchaSiteKey ? <Script src={`https://www.google.com/recaptcha/api.js?render=${recaptchaSiteKey}`} strategy="afterInteractive" /> : null}
       <div className="mx-auto flex min-h-[calc(100vh-80px)] max-w-md items-center">
         <form
           onSubmit={handleSubmit}
-          className="w-full rounded-[32px] border border-brand-softGray bg-white p-6 shadow-soft sm:p-8"
+          className="w-full rounded-xl border border-brand-softGray bg-white p-6 shadow-soft sm:p-8"
         >
-          <Logo variant="symbol-black" size="md" showText />
+          <Logo variant="primary-dark" size="md" />
 
           <h1 className="mt-8 text-3xl font-black">Login Super Admin</h1>
           <p className="mt-3 text-sm leading-6 text-brand-charcoal/70">
@@ -124,6 +153,12 @@ export function AdminLogin() {
                 </div>
               </div>
             </div>
+          ) : null}
+
+          {!recaptchaSiteKey ? (
+            <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800">
+              reCAPTCHA belum aktif. Isi NEXT_PUBLIC_RECAPTCHA_SITE_KEY dan RECAPTCHA_SECRET_KEY sebelum deploy production.
+            </p>
           ) : null}
 
           <label className="mt-6 block text-sm font-black">

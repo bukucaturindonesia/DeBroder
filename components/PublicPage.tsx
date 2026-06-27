@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { PageMotion } from "@/components/PageMotion";
 import { PublicFooter } from "@/components/PublicFooter";
+import { ResponsivePicture } from "@/components/ResponsivePicture";
 import { SiteHeader } from "@/components/SiteHeader";
 import {
   fallbackImages,
@@ -126,27 +127,16 @@ export function PageHero({
   return (
     <section data-reveal className="bg-white">
       <div className="relative w-full overflow-hidden bg-brand-offWhite sm:aspect-[16/5] sm:min-h-[260px] lg:aspect-[16/4.5]">
-        <div className="relative aspect-[16/10] w-full sm:absolute sm:inset-0 sm:aspect-auto">
-          <div className="block h-full sm:hidden">
-            <PublicImage
-              src={mobileImage}
-              alt={title}
-              className="h-full w-full object-cover"
-              sizes="100vw"
-              priority
-              objectPosition={mobileObjectPosition || objectPosition}
-            />
-          </div>
-          <div className="hidden h-full sm:block">
-            <PublicImage
-              src={desktopImage}
-              alt={title}
-              className="h-full w-full object-cover"
-              sizes="100vw"
-              priority
-              objectPosition={objectPosition}
-            />
-          </div>
+        <div className="relative aspect-[4/5] w-full sm:absolute sm:inset-0 sm:aspect-auto">
+          <ResponsivePicture
+            desktopSrc={desktopImage}
+            mobileSrc={mobileImage}
+            alt={title}
+            className="h-full w-full object-cover"
+            priority
+            desktopObjectPosition={objectPosition}
+            mobileObjectPosition={mobileObjectPosition || objectPosition}
+          />
           <div className="absolute inset-0 hidden bg-gradient-to-t from-black/55 via-black/10 to-transparent sm:block" />
         </div>
         <div className="relative px-4 py-6 text-brand-charcoal sm:absolute sm:bottom-8 sm:left-8 sm:right-8 sm:max-w-3xl sm:p-0 sm:text-white">
@@ -474,7 +464,7 @@ export function PublicShell({
   children: ReactNode;
 }) {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-brand-offWhite text-brand-charcoal">
+    <main className="min-h-screen bg-brand-offWhite text-brand-charcoal">
       <SiteHeader />
       <PageMotion />
       {children}

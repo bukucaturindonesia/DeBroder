@@ -358,7 +358,7 @@ export function SiteHeader() {
   }, [isCollectionOpen]);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-brand-softGray bg-white/95 text-brand-charcoal backdrop-blur-xl">
+    <header className="sticky top-0 z-[90] border-b border-brand-softGray bg-white text-brand-charcoal">
       <div
         className={`overflow-hidden border-b border-brand-softGray bg-brand-offWhite text-xs font-medium text-brand-charcoal/60 transition-all duration-300 ${
           showTopbar
@@ -379,9 +379,8 @@ export function SiteHeader() {
       >
         <Link href="/" className="group flex items-center gap-3">
           <Logo
-            variant="symbol-black"
-            size="md"
-            showText
+            variant="primary-dark"
+            size="sm"
             className="transition group-hover:scale-[1.01]"
           />
         </Link>
@@ -428,7 +427,9 @@ export function SiteHeader() {
                     : "text-brand-charcoal/75"
                 }`}
               >
-                {item.label}
+                <span className={item.label === "Sablon DTF" ? "nav-glitch" : undefined}>
+                  {item.label}
+                </span>
               </Link>
             )
           )}
@@ -523,7 +524,9 @@ export function SiteHeader() {
                 }`}
                 onClick={() => setIsOpen(false)}
               >
-                {item.label}
+                <span className={item.label === "Sablon DTF" ? "nav-glitch" : undefined}>
+                  {item.label}
+                </span>
               </Link>
             ))}
           <a

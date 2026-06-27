@@ -27,9 +27,9 @@ export default async function CetakSublimPage() {
       details={[
         "Cetak sublim cocok untuk jersey, apparel event, dan produk custom.",
         "Mendukung kebutuhan produksi kreatif dengan visual yang lebih fleksibel.",
-        "Placeholder gambar hasil sublim bisa diganti dari dashboard."
+        "Hasil warna tajam dan tahan lama untuk desain jersey maupun apparel custom."
       ]}
-      visualLabel="Placeholder Hasil Sublim"
+      visualLabel="Hasil Cetak Sublim DE BRODER"
       ctaText="Konsultasi Cetak Sublim"
       ctaHref={whatsappHref(content.contact.whatsapp_apparel)}
       currentSlug="cetak-sublim"

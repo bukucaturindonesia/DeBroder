@@ -14,6 +14,21 @@ export type Product = {
   harga?: number | string | null;
   base_price?: number | string | null;
   price_label?: string | null;
+  slug?: string;
+  featured?: boolean;
+  urutan: number;
+  status_aktif: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type Service = {
+  id?: string;
+  nama: string;
+  slug: string;
+  deskripsi: string;
+  image_url: string;
+  harga_mulai?: number | string | null;
   urutan: number;
   status_aktif: boolean;
   created_at?: string;
@@ -40,6 +55,7 @@ export type Store = {
   whatsapp: string;
   whatsapp_link: string;
   maps_link: string;
+  jam_operasional?: string;
   image_url?: string;
   urutan: number;
   status_aktif: boolean;
@@ -64,6 +80,8 @@ export type HeroBanner = {
   mobile_image_url?: string;
   hero_video_url?: string;
   video_url?: string;
+  desktop_video_url?: string;
+  mobile_video_url?: string;
   object_position?: string;
   mobile_object_position?: string;
   urutan?: number;
@@ -111,7 +129,10 @@ export type InstagramBanner = {
   id?: string;
   title: string;
   image_url: string;
+  mobile_image_url?: string;
   link_url: string;
+  object_position?: string;
+  mobile_object_position?: string;
   status_aktif: boolean;
   created_at?: string;
   updated_at?: string;
@@ -158,6 +179,7 @@ export type PublicContent = {
   instagramBanner: InstagramBanner | null;
   pageHeroes: PageHeroContent[];
   categories: ServiceCategory[];
+  services: Service[];
   products: Product[];
   stores: Store[];
   orderSteps: OrderStep[];
