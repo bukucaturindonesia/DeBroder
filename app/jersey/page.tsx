@@ -1,0 +1,44 @@
+import type { Metadata } from "next";
+import { JerseyCatalog } from "@/components/JerseyCatalog";
+import { PageHero, PublicShell } from "@/components/PublicPage";
+import { fallbackCategories, getPageHeroImage } from "@/lib/fallback-data";
+import { getPublicContent } from "@/lib/public-data";
+import { whatsappHref } from "@/lib/url";
+
+export const metadata: Metadata = {
+  title: "Custom Jersey | DE BRODER",
+  description: "Pembuatan jersey custom untuk tim olahraga, sekolah, kantor, komunitas, instansi, dan event.",
+  alternates: { canonical: "/jersey" }
+};
+
+export default async function JerseyPage() {
+  const content = await getPublicContent();
+  const pageHero = content.pageHeroes.find((hero) => hero.page_key === "jersey");
+  const specificCategories = content.categories.filter((category) => category.category_key === "jersey");
+  const categories = specificCategories.length
+    ? specificCategories
+    : fallbackCategories.filter((category) => category.category_key === "jersey");
+
+  return (
+    <PublicShell content={content}>
+      <PageHero
+        label={pageHero?.label || "CUSTOM JERSEY"}
+        title={pageHero?.title || "Jersey Custom untuk Tim dan Komunitas"}
+        description={pageHero?.subtitle || "Produksi jersey untuk tim olahraga, sekolah, instansi, dan event."}
+        imageUrl={getPageHeroImage(pageHero)}
+        mobileImageUrl={pageHero?.mobile_image_url}
+        objectPosition={pageHero?.object_position}
+        mobileObjectPosition={pageHero?.mobile_object_position}
+        objectFit={pageHero?.object_fit}
+        imageZoom={pageHero?.focal_zoom}
+        mobileImageZoom={pageHero?.mobile_focal_zoom}
+        ctaText="Konsultasi Jersey"
+        ctaHref={whatsappHref(content.contact.whatsapp_apparel)}
+        secondaryCtaText="Cara Order"
+        secondaryCtaHref="/cara-order"
+        breadcrumbs={[{ label: "Beranda", href: "/" }, { label: "Jersey" }]}
+      />
+      <JerseyCatalog categories={categories} />
+    </PublicShell>
+  );
+}

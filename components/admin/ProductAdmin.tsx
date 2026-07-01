@@ -1,0 +1,413 @@
+/* eslint-disable @next/next/no-img-element */
+"use client";
+
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { FocalPointEditor } from "@/components/admin/FocalPointEditor";
+import { createSupabaseClient, WEBSITE_IMAGES_BUCKET } from "@/lib/supabase";
+import type { FocalPoint, Product, ServiceCategory } from "@/lib/types";
+import { formatRupiah } from "@/lib/url";
+
+type MediaChoice = { id: string; name: string; public_url: string; alt_text?: string; folder?: string };
+type SortKey = "urutan" | "nama" | "price" | "newest";
+
+const emptyProduct: Product = {
+  nama: "",
+  kategori: "",
+  subcategory: "",
+  deskripsi: "",
+  short_detail: "",
+  description: "",
+  badge: "",
+  gambar_url: "",
+  image_url: "",
+  image_alt: "",
+  gallery_urls: [],
+  specifications: [],
+  collection_tags: [],
+  color_tags: [],
+  size_tags: [],
+  material_tags: [],
+  brand: "",
+  object_fit: "cover",
+  object_position: "center center",
+  whatsapp_link: "https://wa.me/6285355333364",
+  price: null,
+  compare_price: null,
+  slug: "",
+  label_new: false,
+  label_promo: false,
+  label_best_seller: false,
+  featured: false,
+  seo_title: "",
+  seo_description: "",
+  og_image_url: "",
+  canonical_url: "",
+  focal_x: 50,
+  focal_y: 50,
+  focal_zoom: 1,
+  target_ratio: "4:5",
+  focal_points: {},
+  sales_count: 0,
+  urutan: 0,
+  status_aktif: true
+};
+
+const focalContexts = [
+  { key: "catalog", label: "Catalog 4:5", ratio: "4:5" },
+  { key: "thumbnail", label: "Thumbnail", ratio: "1:1" },
+  { key: "detail", label: "Product detail", ratio: "4:5" }
+];
+
+function slugify(value: string) {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function listValue(value?: string[]) {
+  return (value || []).join("\n");
+}
+
+function parseList(value: string) {
+  return value.split("\n").map((item) => item.trim()).filter(Boolean);
+}
+
+function numberOrNull(value: string | number | null | undefined) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function focalFor(product: Product, context: string): FocalPoint {
+  return product.focal_points?.[context] || {
+    focal_x: Number(product.focal_x ?? 50),
+    focal_y: Number(product.focal_y ?? 50),
+    zoom: Number(product.focal_zoom ?? 1),
+    target_ratio: focalContexts.find((item) => item.key === context)?.ratio || "4:5"
+  };
+}
+
+async function imageDimensions(file: File) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const dimensions = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return dimensions;
+  } catch {
+    return { width: null, height: null };
+  }
+}
+
+async function contentHash(file: File) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function ProductAdminPanel() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [media, setMedia] = useState<MediaChoice[]>([]);
+  const [form, setForm] = useState<Product>({ ...emptyProduct });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sort, setSort] = useState<SortKey>("urutan");
+  const [focalContext, setFocalContext] = useState("catalog");
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  async function loadData() {
+    const supabase = createSupabaseClient();
+    if (!supabase) return;
+    setLoading(true);
+    const slowTimer = window.setTimeout(() => setStatus("Supabase sedang merespons. Data tetap dimuat..."), 900);
+    const [productResult, categoryResult, mediaResult] = await Promise.all([
+      supabase.from("products").select("*").order("urutan", { ascending: true }),
+      supabase.from("service_categories").select("*").order("urutan", { ascending: true }),
+      supabase.from("media_assets").select("id,name,public_url,alt_text,folder").eq("status_aktif", true).eq("media_type", "image").order("created_at", { ascending: false })
+    ]);
+    window.clearTimeout(slowTimer);
+    setLoading(false);
+    if (productResult.error) {
+      setStatus(`Produk belum dapat dimuat: ${productResult.error.message}`);
+      return;
+    }
+    setProducts((productResult.data || []) as Product[]);
+    setCategories((categoryResult.data || []) as ServiceCategory[]);
+    setMedia((mediaResult.data || []) as MediaChoice[]);
+    setStatus("");
+  }
+
+  useEffect(() => { loadData(); }, []);
+
+  const categoryNames = useMemo(() => Array.from(new Set([
+    ...categories.map((category) => category.nama_kategori),
+    ...products.map((product) => product.kategori)
+  ].filter(Boolean))).sort(), [categories, products]);
+
+  const visibleProducts = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    return products
+      .filter((product) => !search || `${product.nama} ${product.kategori} ${product.subcategory || ""}`.toLowerCase().includes(search))
+      .filter((product) => categoryFilter === "all" || product.kategori === categoryFilter)
+      .filter((product) => statusFilter === "all" || String(product.status_aktif) === statusFilter)
+      .sort((a, b) => {
+        if (sort === "nama") return a.nama.localeCompare(b.nama, "id");
+        if (sort === "price") return Number(a.price || 0) - Number(b.price || 0);
+        if (sort === "newest") return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        return a.urutan - b.urutan;
+      });
+  }, [categoryFilter, products, query, sort, statusFilter]);
+
+  function update<K extends keyof Product>(key: K, value: Product[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function startEdit(product: Product) {
+    setEditingId(product.id || null);
+    setForm({ ...emptyProduct, ...product, focal_points: product.focal_points || {} });
+    setFocalContext("catalog");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function reset() {
+    setEditingId(null);
+    setForm({ ...emptyProduct, focal_points: {} });
+    setFocalContext("catalog");
+  }
+
+  function moveGallery(index: number, direction: -1 | 1) {
+    const images = [...(form.gallery_urls || [])];
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= images.length) return;
+    [images[index], images[nextIndex]] = [images[nextIndex], images[index]];
+    update("gallery_urls", images);
+  }
+
+  async function uploadImage(event: ChangeEvent<HTMLInputElement>, gallery = false) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setStatus("Gunakan JPG, PNG, atau WebP maksimal 10 MB.");
+      return;
+    }
+    const supabase = createSupabaseClient();
+    if (!supabase) return;
+    setUploading(true);
+    setStatus("Mengupload gambar produk...");
+    const hash = await contentHash(file);
+    const { data: duplicate } = await supabase.from("media_assets").select("public_url,name").eq("content_hash", hash).limit(1).maybeSingle();
+    let publicUrl = duplicate?.public_url as string | undefined;
+    if (!publicUrl) {
+      const safeName = `${Date.now()}-${slugify(file.name.replace(/\.[^.]+$/, ""))}.${file.name.split(".").pop()?.toLowerCase() || "jpg"}`;
+      const path = `product/${safeName}`;
+      const { error: uploadError } = await supabase.storage.from(WEBSITE_IMAGES_BUCKET).upload(path, file, { cacheControl: "3600", contentType: file.type });
+      if (uploadError) {
+        setUploading(false);
+        setStatus(`Upload gagal: ${uploadError.message}`);
+        return;
+      }
+      publicUrl = supabase.storage.from(WEBSITE_IMAGES_BUCKET).getPublicUrl(path).data.publicUrl;
+      const dimensions = await imageDimensions(file);
+      const { data: session } = await supabase.auth.getSession();
+      await supabase.from("media_assets").insert({
+        name: file.name,
+        storage_path: path,
+        bucket_id: WEBSITE_IMAGES_BUCKET,
+        public_url: publicUrl,
+        media_type: "image",
+        mime_type: file.type,
+        size_bytes: file.size,
+        width: dimensions.width,
+        height: dimensions.height,
+        alt_text: form.image_alt || form.nama || file.name.replace(/\.[^.]+$/, ""),
+        tags: ["product", slugify(form.kategori || "uncategorized")],
+        content_hash: hash,
+        folder: form.kategori || "Product",
+        uploaded_by: session.session?.user.id || null
+      });
+    }
+    if (gallery) update("gallery_urls", Array.from(new Set([...(form.gallery_urls || []), publicUrl])));
+    else {
+      update("image_url", publicUrl);
+      update("gambar_url", publicUrl);
+      if (!form.image_alt) update("image_alt", file.name.replace(/\.[^.]+$/, ""));
+    }
+    setUploading(false);
+    setStatus(duplicate ? "Gambar yang sama sudah ada; media lama digunakan kembali." : "Gambar ditambahkan ke Media Library.");
+    await loadData();
+  }
+
+  async function saveProduct(event: FormEvent) {
+    event.preventDefault();
+    if (!form.nama.trim() || !form.kategori.trim()) {
+      setStatus("Nama dan kategori produk wajib diisi.");
+      return;
+    }
+    if (!form.image_url) {
+      setStatus("Pilih atau upload gambar utama produk.");
+      return;
+    }
+    const supabase = createSupabaseClient();
+    if (!supabase) return;
+    setSaving(true);
+    const catalogFocal = focalFor(form, "catalog");
+    const payload = {
+      ...form,
+      id: undefined,
+      created_at: undefined,
+      updated_at: new Date().toISOString(),
+      slug: form.slug?.trim() || slugify(form.nama),
+      gambar_url: form.image_url,
+      image_alt: form.image_alt?.trim() || form.nama,
+      deskripsi: form.description?.trim() || form.deskripsi?.trim() || form.short_detail?.trim() || "",
+      description: form.description?.trim() || form.deskripsi?.trim() || "",
+      badge: form.label_promo ? "Promo" : form.label_new ? "New" : form.label_best_seller ? "Best Seller" : "",
+      price: numberOrNull(form.price),
+      compare_price: numberOrNull(form.compare_price),
+      focal_x: catalogFocal.focal_x,
+      focal_y: catalogFocal.focal_y,
+      focal_zoom: catalogFocal.zoom,
+      target_ratio: catalogFocal.target_ratio,
+      canonical_url: form.canonical_url?.trim() || `/produk/${form.slug?.trim() || slugify(form.nama)}`
+    };
+    const result = editingId
+      ? await supabase.from("products").update(payload).eq("id", editingId).select("*").single()
+      : await supabase.from("products").insert(payload).select("*").single();
+    setSaving(false);
+    if (result.error) {
+      setStatus(`Produk gagal disimpan: ${result.error.message}`);
+      return;
+    }
+    setStatus("Produk tersimpan ke Supabase dan langsung tersedia untuk website publik.");
+    reset();
+    await loadData();
+  }
+
+  async function duplicateProduct(product: Product) {
+    const supabase = createSupabaseClient();
+    if (!supabase) return;
+    const { id: _id, created_at: _created, updated_at: _updated, ...copy } = product;
+    void _id; void _created; void _updated;
+    const { error } = await supabase.from("products").insert({
+      ...copy,
+      nama: `${product.nama} (Salinan)`,
+      slug: `${product.slug || slugify(product.nama)}-salinan-${Date.now().toString().slice(-5)}`,
+      status_aktif: false,
+      urutan: product.urutan + 1
+    });
+    setStatus(error ? `Duplikasi gagal: ${error.message}` : "Produk diduplikasi sebagai nonaktif.");
+    if (!error) await loadData();
+  }
+
+  async function deleteProduct(product: Product) {
+    if (!product.id || !window.confirm(`Hapus produk “${product.nama}”?`)) return;
+    const supabase = createSupabaseClient();
+    const { error } = await supabase!.from("products").delete().eq("id", product.id);
+    setStatus(error ? `Produk gagal dihapus: ${error.message}` : "Produk dihapus.");
+    if (!error) await loadData();
+  }
+
+  const focalValue = focalFor(form, focalContext);
+  const labels = [form.label_new && "New", form.label_promo && "Promo", form.label_best_seller && "Best Seller"].filter(Boolean);
+
+  return (
+    <div className="mt-6 grid gap-6">
+      {status ? <p role="status" className="border border-brand-softGray bg-white p-4 text-sm font-semibold">{status}</p> : null}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,.6fr)]">
+        <form onSubmit={saveProduct} className="grid gap-5 bg-white p-5 sm:p-7">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="text-xl font-semibold">{editingId ? "Edit produk" : "Produk baru"}</h2><p className="mt-1 text-sm text-brand-charcoal/55">Semua data disimpan langsung ke Supabase.</p></div>
+            {editingId ? <button type="button" onClick={reset} className="text-sm font-semibold underline">Batal edit</button> : null}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Nama produk" required><input value={form.nama} onChange={(e) => update("nama", e.target.value)} /></Field>
+            <Field label="Slug"><input value={form.slug || ""} onChange={(e) => update("slug", e.target.value)} placeholder="otomatis-dari-nama" /></Field>
+            <Field label="Kategori" required><input list="product-categories" value={form.kategori} onChange={(e) => update("kategori", e.target.value)} /><datalist id="product-categories">{categoryNames.map((name) => <option key={name}>{name}</option>)}</datalist></Field>
+            <Field label="Subkategori"><input value={form.subcategory || ""} onChange={(e) => update("subcategory", e.target.value)} /></Field>
+            <Field label="Harga"><input type="number" min="0" value={form.price ?? ""} onChange={(e) => update("price", e.target.value)} /></Field>
+            <Field label="Harga asli / pembanding"><input type="number" min="0" value={form.compare_price ?? ""} onChange={(e) => update("compare_price", e.target.value)} /></Field>
+            <Field label="Urutan tampil"><input type="number" min="0" value={form.urutan} onChange={(e) => update("urutan", Number(e.target.value))} /></Field>
+            <Field label="Jumlah terjual"><input type="number" min="0" value={form.sales_count || 0} onChange={(e) => update("sales_count", Number(e.target.value))} /></Field>
+          </div>
+
+          <Field label="Deskripsi singkat"><textarea rows={2} value={form.short_detail || ""} onChange={(e) => update("short_detail", e.target.value)} /></Field>
+          <Field label="Deskripsi lengkap"><textarea rows={5} value={form.description || form.deskripsi || ""} onChange={(e) => update("description", e.target.value)} /></Field>
+          <Field label="Spesifikasi (satu per baris)"><textarea rows={4} value={listValue(form.specifications)} onChange={(e) => update("specifications", parseList(e.target.value))} placeholder="Bahan: Cotton Combed 24s\nUkuran: S–XXL" /></Field>
+
+          <div className="grid gap-3 rounded-xl bg-brand-offWhite p-4 sm:grid-cols-4">
+            <Check label="New" checked={!!form.label_new} onChange={(value) => update("label_new", value)} />
+            <Check label="Promo" checked={!!form.label_promo} onChange={(value) => update("label_promo", value)} />
+            <Check label="Best Seller" checked={!!form.label_best_seller} onChange={(value) => update("label_best_seller", value)} />
+            <Check label="Aktif" checked={form.status_aktif} onChange={(value) => update("status_aktif", value)} />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Material (satu per baris)"><textarea rows={3} value={listValue(form.material_tags)} onChange={(e) => update("material_tags", parseList(e.target.value))} /></Field>
+            <Field label="Warna (satu per baris)"><textarea rows={3} value={listValue(form.color_tags)} onChange={(e) => update("color_tags", parseList(e.target.value))} /></Field>
+            <Field label="Ukuran (satu per baris)"><textarea rows={3} value={listValue(form.size_tags)} onChange={(e) => update("size_tags", parseList(e.target.value))} /></Field>
+            <Field label="Tag koleksi (satu per baris)"><textarea rows={3} value={listValue(form.collection_tags)} onChange={(e) => update("collection_tags", parseList(e.target.value))} /></Field>
+          </div>
+
+          <div className="rounded-xl border border-brand-softGray p-4">
+            <h3 className="font-semibold">Gambar produk</h3>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Field label="Pilih gambar utama dari Media Library"><select value={form.image_url || ""} onChange={(e) => { update("image_url", e.target.value); update("gambar_url", e.target.value); const selected = media.find((item) => item.public_url === e.target.value); if (selected?.alt_text && !form.image_alt) update("image_alt", selected.alt_text); }}><option value="">Pilih media</option>{media.map((item) => <option key={item.id} value={item.public_url}>{item.folder ? `${item.folder} / ` : ""}{item.name}</option>)}</select></Field>
+              <Field label="Alt text"><input value={form.image_alt || ""} onChange={(e) => update("image_alt", e.target.value)} /></Field>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <label className="cursor-pointer rounded-full bg-brand-charcoal px-4 py-2 text-xs font-semibold text-white">{uploading ? "Mengupload..." : "Upload gambar utama"}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={(e) => uploadImage(e)} /></label>
+              <label className="cursor-pointer rounded-full border border-brand-softGray px-4 py-2 text-xs font-semibold">Tambah ke galeri<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={(e) => uploadImage(e, true)} /></label>
+              <select aria-label="Tambah media ke galeri" value="" onChange={(e) => { if (e.target.value) update("gallery_urls", Array.from(new Set([...(form.gallery_urls || []), e.target.value]))); }} className="min-h-9 rounded-full border border-brand-softGray bg-white px-3 text-xs font-semibold"><option value="">Pilih galeri dari library</option>{media.map((item) => <option key={item.id} value={item.public_url}>{item.name}</option>)}</select>
+            </div>
+            {form.gallery_urls?.length ? <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">{form.gallery_urls.map((url, index) => <div key={url} className="relative"><img src={url} alt="Galeri produk" className="aspect-[4/5] w-full object-cover" /><button type="button" aria-label="Hapus dari galeri" onClick={() => update("gallery_urls", form.gallery_urls?.filter((item) => item !== url))} className="absolute right-1 top-1 rounded-full bg-white px-2 py-1 text-xs shadow">×</button><div className="absolute bottom-1 left-1 flex gap-1"><button type="button" aria-label="Geser gambar ke kiri" onClick={() => moveGallery(index, -1)} disabled={index === 0} className="rounded bg-white px-2 py-1 text-xs shadow disabled:opacity-40">←</button><button type="button" aria-label="Geser gambar ke kanan" onClick={() => moveGallery(index, 1)} disabled={index === (form.gallery_urls?.length || 0) - 1} className="rounded bg-white px-2 py-1 text-xs shadow disabled:opacity-40">→</button></div></div>)}</div> : null}
+          </div>
+
+          {form.image_url ? <div><div className="mb-3 flex flex-wrap gap-2">{focalContexts.map((context) => <button key={context.key} type="button" onClick={() => setFocalContext(context.key)} className={`rounded-full px-4 py-2 text-xs font-semibold ${focalContext === context.key ? "bg-brand-green text-white" : "border border-brand-softGray"}`}>{context.label}</button>)}</div><FocalPointEditor src={form.image_url} alt={form.image_alt || form.nama} value={focalValue} onChange={(value) => setForm((current) => ({ ...current, focal_points: { ...(current.focal_points || {}), [focalContext]: value }, ...(focalContext === "catalog" ? { focal_x: value.focal_x, focal_y: value.focal_y, focal_zoom: value.zoom, target_ratio: value.target_ratio } : {}) }))} onSave={() => setStatus("Fokus diperbarui di formulir. Simpan produk untuk menerbitkan perubahan.")} /></div> : null}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="SEO title"><input value={form.seo_title || ""} onChange={(e) => update("seo_title", e.target.value)} maxLength={60} /></Field>
+            <Field label="Canonical URL"><input value={form.canonical_url || ""} onChange={(e) => update("canonical_url", e.target.value)} placeholder="/produk/nama-produk" /></Field>
+            <Field label="SEO description"><textarea rows={3} value={form.seo_description || ""} onChange={(e) => update("seo_description", e.target.value)} maxLength={160} /></Field>
+            <Field label="Open Graph image"><select value={form.og_image_url || ""} onChange={(e) => update("og_image_url", e.target.value)}><option value="">Gunakan gambar utama</option>{media.map((item) => <option key={item.id} value={item.public_url}>{item.name}</option>)}</select></Field>
+          </div>
+
+          <button disabled={saving || uploading} className="min-h-12 rounded-full bg-brand-green px-6 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Menyimpan..." : editingId ? "Simpan perubahan" : "Buat produk"}</button>
+        </form>
+
+        <aside className="self-start bg-white p-5 xl:sticky xl:top-24">
+          <p className="text-xs font-semibold uppercase tracking-[.18em] text-brand-charcoal/50">Preview kartu</p>
+          <div className="mt-4 overflow-hidden bg-brand-offWhite">
+            <div className="relative aspect-[4/5] overflow-hidden bg-white">{form.image_url ? <img src={form.image_url} alt={form.image_alt || form.nama} className="h-full w-full object-cover" style={{ objectPosition: `${focalFor(form, "catalog").focal_x}% ${focalFor(form, "catalog").focal_y}%`, transform: `scale(${focalFor(form, "catalog").zoom})`, transformOrigin: `${focalFor(form, "catalog").focal_x}% ${focalFor(form, "catalog").focal_y}%` }} /> : <div className="grid h-full place-items-center text-sm text-brand-charcoal/40">Pilih gambar</div>}{labels.length ? <div className="absolute left-3 top-3 flex flex-wrap gap-1">{labels.map((label) => <span key={String(label)} className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold shadow">{label}</span>)}</div> : null}</div>
+            <div className="p-4"><h3 className="line-clamp-2 font-semibold">{form.nama || "Nama produk"}</h3><p className="mt-2 text-sm font-semibold">{formatRupiah(form.price) || "Harga belum diisi"}</p>{form.compare_price ? <p className="text-xs text-brand-charcoal/45 line-through">{formatRupiah(form.compare_price)}</p> : null}</div>
+          </div>
+        </aside>
+      </div>
+
+      <section className="bg-white p-5 sm:p-7">
+        <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-xl font-semibold">Daftar produk</h2><p className="mt-1 text-sm text-brand-charcoal/55">{visibleProducts.length} produk</p></div></div>
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama atau kategori..." className="min-h-11 rounded-lg border border-brand-softGray px-4 text-sm" />
+          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="all">Semua kategori</option>{categoryNames.map((name) => <option key={name}>{name}</option>)}</select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">Semua status</option><option value="true">Aktif</option><option value="false">Nonaktif</option></select>
+          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}><option value="urutan">Urutan tampil</option><option value="nama">Nama A–Z</option><option value="price">Harga</option><option value="newest">Terbaru</option></select>
+        </div>
+
+        {loading ? <div className="mt-5 grid gap-3">{[1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse bg-brand-offWhite" />)}</div> : visibleProducts.length ? (
+          <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm"><thead><tr className="border-b border-brand-softGray text-xs uppercase tracking-wide text-brand-charcoal/50"><th className="p-3">Produk</th><th className="p-3">Kategori</th><th className="p-3">Harga</th><th className="p-3">Status</th><th className="p-3">Urutan</th><th className="p-3">Aksi</th></tr></thead><tbody>{visibleProducts.map((product) => <tr key={product.id || product.slug} className="border-b border-brand-softGray/70"><td className="p-3"><div className="flex items-center gap-3"><img src={product.image_url || product.gambar_url} alt={product.image_alt || product.nama} className="aspect-[4/5] w-14 object-cover" /><div><p className="font-semibold">{product.nama}</p><p className="text-xs text-brand-charcoal/45">/{product.slug}</p></div></div></td><td className="p-3">{product.kategori}{product.subcategory ? <span className="block text-xs text-brand-charcoal/45">{product.subcategory}</span> : null}</td><td className="p-3 font-semibold">{formatRupiah(product.price) || "—"}</td><td className="p-3"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${product.status_aktif ? "bg-green-50 text-green-800" : "bg-gray-100 text-gray-600"}`}>{product.status_aktif ? "Aktif" : "Nonaktif"}</span></td><td className="p-3">{product.urutan}</td><td className="p-3"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => startEdit(product)} className="rounded-full bg-brand-charcoal px-3 py-2 text-xs font-semibold text-white">Edit</button><button type="button" onClick={() => duplicateProduct(product)} className="rounded-full border border-brand-softGray px-3 py-2 text-xs font-semibold">Duplikat</button><button type="button" onClick={() => deleteProduct(product)} className="rounded-full px-3 py-2 text-xs font-semibold text-red-700">Hapus</button></div></td></tr>)}</tbody></table></div>
+        ) : <div className="mt-5 bg-brand-offWhite p-8 text-center"><p className="font-semibold">Tidak ada produk</p><p className="mt-2 text-sm text-brand-charcoal/55">Ubah filter atau buat produk pertama.</p></div>}
+      </section>
+    </div>
+  );
+}
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return <label className="block text-sm font-semibold">{label}{required ? " *" : ""}<span className="mt-2 block [&>input]:min-h-11 [&>input]:w-full [&>input]:rounded-lg [&>input]:border [&>input]:border-brand-softGray [&>input]:px-4 [&>input]:font-normal [&>select]:min-h-11 [&>select]:w-full [&>select]:rounded-lg [&>select]:border [&>select]:border-brand-softGray [&>select]:bg-white [&>select]:px-4 [&>select]:font-normal [&>textarea]:w-full [&>textarea]:rounded-lg [&>textarea]:border [&>textarea]:border-brand-softGray [&>textarea]:px-4 [&>textarea]:py-3 [&>textarea]:font-normal">{children}</span></label>;
+}
+
+function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return <label className="flex min-h-10 items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 accent-brand-green" />{label}</label>;
+}
